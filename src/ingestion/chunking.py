@@ -2,7 +2,7 @@
 import uuid
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter 
-from RAG.ingestion.parser import DocumentParsing
+from ingestion.parser import DocumentParsing
 
 from dataclasses import dataclass
 

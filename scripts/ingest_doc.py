@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path 
 
-from RAG.ingestion.parser import DocumentParsing
-from RAG.ingestion.chunking import Chunk_section
+from ingestion.parser import DocumentParsing
+from ingestion.chunking import Chunk_section
 
 
 def main():

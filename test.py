@@ -1,5 +1,5 @@
-from RAG.ingestion.parser import DocumentParsing 
-from RAG.ingestion.chunking import Chunk_section
+from ingestion.parser import DocumentParsing 
+from ingestion.chunking import Chunk_section
 
 # parser = DocumentParsing()
 # out = parser.parse("test.pdf")

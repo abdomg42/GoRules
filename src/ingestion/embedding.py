@@ -47,3 +47,6 @@ class EmbeddingClient:
             return list(map(float, embeddings))
         
         raise RuntimeError(f"Unexpected response format: {data}")
+    
+class EmbeddingAgent:
+    pass
