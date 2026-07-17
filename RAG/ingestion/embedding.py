@@ -28,4 +28,22 @@ class EmbeddingClient:
             method="POST",
         )
 
+        try :
+            with request.urlopen(req, timeout=120) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as e:
+            raise RuntimeError(f"HTTP error: {e.code} - {e.reason}")
+        except error.URLError as e:
+            raise RuntimeError(f"URL error: {e.reason}")
+
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected response format: {data}")
+        embeddings = data.get("embeddings")
         
+        if isinstance(embeddings, list):
+            return [list(map(float, emb)) for emb in embeddings if isinstance(emb, list)]
+        embeddings = data.get("embedding")
+        if isinstance(embeddings, list):
+            return list(map(float, embeddings))
+        
+        raise RuntimeError(f"Unexpected response format: {data}")
