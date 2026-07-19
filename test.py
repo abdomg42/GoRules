@@ -1,4 +1,4 @@
-from ingestion.parser import DocumentParsing 
+from ingestion.parsing import DocumentParsing 
 from ingestion.chunking import Chunk_section
 
 # parser = DocumentParsing()

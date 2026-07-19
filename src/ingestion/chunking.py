@@ -2,10 +2,11 @@
 import uuid
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter 
-from ingestion.parser import DocumentParsing
+from ingestion.parsing import DocumentParsing
 
 from dataclasses import dataclass
-
+from config import CHUNK_OVERLAP_WORDS, CHUNK_SIZE_WORDS
+from parsing import Section
 
 @dataclass
 class Chunk:
@@ -14,35 +15,30 @@ class Chunk:
     section_label: str
     content: str
 
-class Chunk_section: 
-    def __init__(self, chunk_size=1000, chunk_overlap=200):
-        self.chunk_size = chunk_size 
-        self.chunk_overlap = chunk_overlap
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,            
-            separators=["\n\n", "\n", ". ", " ", ""],
-            length_function=len,
-        )
-    def chunk_document(self, file_path):
-        document_parser = DocumentParsing()
-        text = document_parser.parse(file_path=file_path)
-        chunks = self.text_splitter.split_text(text)
-        chunk_objects = []
-        # for section in sections:
-        #     for piece in section.text_splitter.split_text(section.content):
-        #         chunk.append(Chunk(
-        #             chunk_id = str(uuid.uuid4()),
-        #             document_id=document_id,
-        #             project_id=project_id,
-        #             section_label=section.label,
-        #             content=piece,
-        #         ))
-        # return chunk 
-        for i, chunk in enumerate(chunks):
-            chunk_id = str(uuid.uuid4())
-            document_name = file_path.split("/")[-1]
-            section_label = f"Section {i + 1}"
-            chunk_objects.append(Chunk(chunk_id, document_name, section_label, chunk))
-        return chunk_objects
+
+
+def chunk_sections(sections: list[Section], document_name: str) -> list[Chunk]:
+    chunks: list[Chunk] = []
+    counter = 0
+    for section in sections:
+        words = section.text.split()
+        if not words:
+            continue
+        start = 0
+        while start < len(words):
+            end = start + CHUNK_SIZE_WORDS
+            piece = " ".join(words[start:end])
+            counter += 1
+            chunks.append(
+                Chunk(
+                    chunk_id=f"{document_name}_{counter}",
+                    document_name=document_name,
+                    section_label=section.label,
+                    content=piece,
+                )
+            )
+            if end >= len(words):
+                break
+            start = end - CHUNK_OVERLAP_WORDS
+    return chunks
 
