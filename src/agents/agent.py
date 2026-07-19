@@ -1,9 +1,11 @@
 
 import json
+import socket
 import urllib.error
 import urllib.request
 
-from config import LLM_MODEL, OLLAMA_BASE_URL
+from config import  LLM_MODEL, OLLAMA_BASE_URL
+from prompt import SYSTEM_PROMPT
 
 
 def _ollama_request(path: str, payload: dict) -> dict:
@@ -30,7 +32,7 @@ def ask(question: str, retrieved_chunks: list[dict]) -> str:
         return (
             "Aucun document pertinent trouve dans ce projet pour repondre "
             "a cette question. Avez-vous bien importe des documents "
-            "(commande : python ingest.py --project ... --file ...) ?"
+            "(commande : python ingest_doc.py --project ... --file ...) ?"
         )
 
     context = "\n\n---\n\n".join(
@@ -38,14 +40,53 @@ def ask(question: str, retrieved_chunks: list[dict]) -> str:
         for c in retrieved_chunks
     )
 
-    payload = {
-        "model": LLM_MODEL,
+    base_payload = {
         "system": SYSTEM_PROMPT,
         "prompt": f"Question : {question}\n\nContexte documentaire disponible :\n{context}",
         "stream": False,
-        "options": {"num_predict": 1500},
+        # Laisser Ollama utiliser le GPU configure nativement (pas de fallback CPU ici).
+        "options": {"num_predict": 1200},
     }
-    data = _ollama_request("/api/generate", payload)
+
+    models_to_try = [LLM_MODEL]
+    
+
+    try:
+        data = {}
+        last_exc = None
+        for model_name in models_to_try:
+            payload = {**base_payload, "model": model_name}
+            try:
+                data = _ollama_request("/api/generate", payload)
+                break
+            except Exception as exc:
+                last_exc = exc
+        else:
+            raise last_exc if last_exc else RuntimeError("Aucun modele LLM disponible")
+    except Exception as exc:
+        excerpt_lines = []
+        for chunk in retrieved_chunks[:3]:
+            snippet = chunk["content"].replace("\n", " ").strip()
+            snippet = snippet[:220] + ("..." if len(snippet) > 220 else "")
+            excerpt_lines.append(
+                f"- Source: {chunk['document_name']} / {chunk['section_label']}\n  Extrait: {snippet}"
+            )
+
+        if isinstance(exc, socket.timeout):
+            reason = "timeout de generation"
+        else:
+            reason = str(exc)
+
+        return (
+            "Le contexte documentaire a bien ete retrouve, mais Ollama n'a pas pu generer "
+            "la reponse en mode GPU.\n"
+            f"Modeles testes: {', '.join(models_to_try)}\n"
+            f"Erreur: {reason}\n\n"
+            "Conseil: utilisez un modele plus leger cote GPU via la variable "
+            f"Question: {question}\n\n"
+            "Extraits pertinents:\n"
+            + "\n".join(excerpt_lines)
+        )
 
     if "error" in data:
         raise RuntimeError(f"Ollama a retourne une erreur : {data['error']}")

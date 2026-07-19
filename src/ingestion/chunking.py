@@ -1,12 +1,7 @@
-
-import uuid
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter 
-from ingestion.parsing import DocumentParsing
-
 from dataclasses import dataclass
+
 from config import CHUNK_OVERLAP_WORDS, CHUNK_SIZE_WORDS
-from parsing import Section
+from ingestion.parsing import Section
 
 @dataclass
 class Chunk:
@@ -17,7 +12,11 @@ class Chunk:
 
 
 
-def chunk_sections(sections: list[Section], document_name: str) -> list[Chunk]:
+def chunk_sections(
+    sections: list[Section],
+    document_name: str,
+    project_id: str | None = None,
+) -> list[Chunk]:
     chunks: list[Chunk] = []
     counter = 0
     for section in sections:
