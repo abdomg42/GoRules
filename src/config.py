@@ -1,36 +1,15 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
-class Settings(BaseSettings):
+from dotenv import load_dotenv
 
-    model_config = SettingsConfigDict(env_file=".env", extra='ignore')
+load_dotenv()
 
-    #llm 
-    ollama_base_url = "http://localhost:11434"
-    llm_model_reasoning = "mistral:7b"
-    llm_model_light = "mistral:7b"
-    
-    #Qdrant 
-    qdrant_url = "http://localhost:6333"
-    qdrant_collection = "documents"
+# Configuration locale via Ollama (pas de cle API externe)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+LLM_MODEL = os.getenv("LLM_MODEL", "mistral:7b")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large")
+CHROMA_DIR = os.getenv("CHROMA_DIR", "./chroma_data")
 
-    #Neo4j
-    neo4j_url = "bolt://localhost:7687"
-    neo4j_user = "neo4j"
-    neo4j_password = "password123"
-
-    #Redis 
-    redis_url = "redis://localhost:6379"
-
-    #Postgres
-    database_url = "postgresql://postgres:password@localhost:5432/mydatabase"
-
-    #Embeddings
-    embedding_model = "mxbai-embed-large"
-    embedding_dimension= 1024
-
-    # Chunking
-    chunk_size_tokens = 500
-    chunk_overlap_tokens = 75
-
-
-settings = Settings()
+# Parametres de chunking (en mots, approximation simple ~1.3 mot/token en francais)
+CHUNK_SIZE_WORDS = 350
+CHUNK_OVERLAP_WORDS = 50
