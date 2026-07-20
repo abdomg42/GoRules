@@ -2,14 +2,14 @@
 import json 
 from urllib import error, request
 
-from src.config import settings
+from src.config import OLLAMA_BASE_URL, EMBEDDING_MODEL
 
 
 class EmbeddingClient:
 
     def __init__(self):
-        self.ollama_base_url = settings.ollama_base_url.rstrip("/")
-        self.model = settings.embedding_model
+        self.ollama_base_url = OLLAMA_BASE_URL.rconfigstrip("/")
+        self.model = EMBEDDING_MODEL
 
     def embed_batch(self, texts):
 
