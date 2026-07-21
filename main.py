@@ -9,3 +9,8 @@ app = FastAPI()
 _parser = Parser()
 _chunker = Chunker()
 _embedding = EmbeddingAgent(embedding_client=EmbeddingClient())
+
+@app.get("/health")
+def status():
+    return {"status": "ok"}
+
