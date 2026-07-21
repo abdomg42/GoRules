@@ -2,6 +2,7 @@
 import json 
 from urllib import error, request
 
+from ingestion.chunking import Chunk
 from src.config import OLLAMA_BASE_URL, EMBEDDING_MODEL
 
 
@@ -49,4 +50,13 @@ class EmbeddingClient:
         raise RuntimeError(f"Unexpected response format: {data}")
     
 class EmbeddingAgent:
-    pass
+    def __init__(self, embedding_client: EmbeddingClient):
+        self.embedding_client = embedding_client
+    def embed_and_index(self, chunks:list[Chunk], batch_size=64):
+        for i in range(0,len(chunks), batch_size):
+            batch = chunks[i: i + batch_size]
+            vector = self.embedding_client.embed_batch([chunk.content for chunk in batch])
+            
+
+
+        
