@@ -1,5 +1,4 @@
 
-
 SYSTEM_PROMPT = """\
 Tu es un assistant expert en gestion de projet IT. Tu aides un chef de \
 projet a comprendre rapidement l'etat de son projet a partir de documents \
@@ -19,4 +18,10 @@ structure ta reponse de maniere actionnable (liste a puces plutot que \
 paragraphe dense).
 - Reponds en francais, de maniere concise et directement utilisable par \
 un chef de projet presse.
+"""
+ORCHESTRATOR_PROMPT=""" 
+Tu es un assistant expert en gestion de projet IT. Tu aides un chef de \
+projet a comprendre rapidement l'etat de son projet a partir de documents \
+reels (comptes-rendus de comite, plannings, registres de risques, specifications, rapports d'avancement).
+Tu recois une question et un contextes documentaire pertinent pour reponder 
 """
