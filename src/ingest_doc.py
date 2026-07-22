@@ -2,8 +2,8 @@ import argparse
 from pathlib import Path
 
 
-from ingestion.parsing import parse_document
-from ingestion.chunking import chunk_sections
+from ingestion.parsing import Parser
+from ingestion.chunking import Chunker
 from store import add_chunks
 
 
@@ -33,15 +33,15 @@ def main():
 
     file_path = resolve_input_path(args.file)
 
-    document_id = file_path.stem
-
+    document_name = file_path.stem
+    _parser = Parser(str(file_path))
+    _chunker = Chunker()
     print(f"---start parsing {file_path}---")
-    sections = parse_document(str(file_path))
+    sections = _parser.parse_document()
     print(f"--- {len(sections)} sections extraites")
 
     print("--- Chunking")
-    
-    chunks = chunk_sections(sections, document_name=document_id, project_id=args.project)
+    chunks = _chunker.chunk_sections(sections, document_name=str(document_name), project_id=args.project)
     print(f"--->{len(chunks)} chunks generes ")
 
     print("--- Indexation")

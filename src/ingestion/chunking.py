@@ -18,6 +18,7 @@ class Chunker:
         self.chunk_overlap_words = chunk_overlap_words
 
     def chunk_sections(
+        self,
         sections: list[Section],
         document_name: str,
         project_id: str | None = None,
@@ -39,6 +40,7 @@ class Chunker:
                         document_name=document_name,
                         section_label=section.label,
                         content=piece,
+                        project_id=project_id,
                     )
                 )
                 if end >= len(words):
