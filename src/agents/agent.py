@@ -94,4 +94,5 @@ def ask(question: str, retrieved_chunks: list[dict]) -> str:
     answer = data.get("response", "").strip()
     if not answer:
         raise RuntimeError("Ollama n'a retourne aucune reponse.")
-    return answer
+    return answer   
+    

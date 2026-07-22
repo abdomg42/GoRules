@@ -9,6 +9,7 @@ class Chunk:
     document_name: str
     section_label: str
     content: str
+    project_id : str
 
 class Chunker:
 

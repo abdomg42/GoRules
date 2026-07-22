@@ -1,5 +1,4 @@
 
-
 SYSTEM_PROMPT = """\
 Tu es un assistant expert en gestion de projet IT. Tu aides un chef de \
 projet a comprendre rapidement l'etat de son projet a partir de documents \
