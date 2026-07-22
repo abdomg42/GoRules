@@ -39,16 +39,23 @@ class LLMBase:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Reponse Ollama invalide depuis {url}: {exc}") from exc 
         return None
-    def ask(self, question, retrieved_chunks):
-        if not retrieved_chunks:
-            return (
-                "Aucun document pertinent trouve dans ce projet pour repondre "
-            )
-        context = "\n\n---\n\n".join(
-            f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}" for c in retrieved_chunks
-        ) 
-        playlaod = {
-            "model":self.model,
-            "system": self.read_prompt("system"),
-            "prompt": f"Question : {question}\n\n Contexte documentaire disponible :\n\n{context}"
-        }
+    # def ask(self, question, retrieved_chunks):
+    #     if not retrieved_chunks:
+    #         return (
+    #             "Aucun document pertinent trouve dans ce projet pour repondre "
+    #         )
+    #     context = "\n\n---\n\n".join(
+    #         f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}" for c in retrieved_chunks
+    #     ) 
+    #     playload = {
+    #         "model":self.model,
+    #         "system": self.read_prompt("system"),
+    #         "prompt": f"Question : {question}\n\n Contexte documentaire disponible :\n\n{context}"
+    #     }
+    #     return playload 
+    @staticmethod
+    def _parseJson(raw_text:str) :
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[len("```json"):].strip()
+            cleaned = cleand.split("\n",1)[-1] if cleaned.lower().startswith("json") else cleaned
