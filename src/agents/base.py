@@ -15,11 +15,10 @@ class LLMBase:
     def get_model(self):
         return self.llm_model
     def read_prompt(self, prompt_name:str):
-        prompt_path = PROMPT_DIR / f'{prompt_name}.txt'
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            return f.read()
+        prompt_path = PROMPT_DIR / f'{prompt_name}.txt'       
         if not prompt_path.exists():
             raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        return prompt_path.read_text(encoding='utf-8')
     @retry(stop_after_attempt(5))
     def _call_llm(self, playload) -> None:
         url = f"{self.base_url}/api/generate"
@@ -58,4 +57,26 @@ class LLMBase:
         cleaned = raw_text.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[len("```json"):].strip()
-            cleaned = cleand.split("\n",1)[-1] if cleaned.lower().startswith("json") else cleaned
+            cleaned = cleaned.split("\n",1)[-1] if cleaned.lower().startswith("json") else cleaned
+        try: 
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Erreur de parsing JSON: {exc.msg}. Texte brut: {raw_text}") from exc
+    def run(self, question:str, retrieved_chunks:list[dict]) -> dict:
+        if not retrieved_chunks:
+            return {
+                "answer": "Aucun document pertinent trouve dans ce projet pour repondre",
+                "sources": []
+            }
+        context = "\n\n---\n\n".join(
+            f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}" for c in retrieved_chunks
+        ) 
+        playload = {
+            "model":self.llm_model,
+            "system": self.read_prompt("system"),
+            "prompt": f"Question : {question}\n\n Contexte documentaire disponible :\n\n{context}"
+        }
+        response = self._call_llm(playload)
+        if not response or 'text' not in response:
+            raise RuntimeError(f"Reponse invalide de l'IA: {response}")
+        return self._parseJson(response['text'])
