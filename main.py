@@ -1,5 +1,6 @@
 # uvicorn main:app --reload
 
+import json
 import os
 import sys
 import tempfile
@@ -7,6 +8,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -23,7 +25,7 @@ if not _chroma_dir.is_absolute():
     _chroma_dir = SRC_DIR / _chroma_dir
 os.environ["CHROMA_DIR"] = str(_chroma_dir)
 
-from agents.agent import ask  # noqa: E402
+from agents.agent import ask, ask_stream  # noqa: E402
 from ingestion.chunking import Chunker  # noqa: E402
 from ingestion.parsing import Parser  # noqa: E402
 from store import add_chunks, list_projects, search  # noqa: E402
@@ -123,3 +125,30 @@ def query_project(project_id: str, payload: QueryRequest) -> QueryResponse:
         for chunk in chunks
     ]
     return QueryResponse(answer=answer, sources=sources)
+
+
+@app.post("/project/{project_id}/query/stream")
+def query_project_stream(project_id: str, payload: QueryRequest):
+    """Variante streamante de /query : evenements NDJSON (sources, token, error)."""
+    try:
+        chunks = search(project_id, payload.question, top_k=payload.top_k)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    sources = [
+        {
+            "document_name": str(chunk.get("document_name", "?")),
+            "section_label": str(chunk.get("section_label", "?")),
+        }
+        for chunk in chunks
+    ]
+
+    def event_stream():
+        yield json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False) + "\n"
+        try:
+            for piece in ask_stream(payload.question, chunks):
+                yield json.dumps({"type": "token", "text": piece}, ensure_ascii=False) + "\n"
+        except Exception as exc:
+            yield json.dumps({"type": "error", "detail": str(exc)}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
