@@ -94,5 +94,45 @@ def ask(question: str, retrieved_chunks: list[dict]) -> str:
     answer = data.get("response", "").strip()
     if not answer:
         raise RuntimeError("Ollama n'a retourne aucune reponse.")
-    return answer   
+    return answer
+
+
+def ask_stream(question: str, retrieved_chunks: list[dict]):
+    """Comme ask(), mais stream la reponse token par token (NDJSON Ollama)."""
+    if not retrieved_chunks:
+        yield (
+            "Aucun document pertinent trouve dans ce projet pour repondre "
+            "a cette question. Avez-vous bien importe des documents "
+            "(commande : python ingest_doc.py --project ... --file ...) ?"
+        )
+        return
+
+    context = "\n\n---\n\n".join(
+        f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}"
+        for c in retrieved_chunks
+    )
+    payload = {
+        "model": LLM_MODEL,
+        "system": SYSTEM_PROMPT,
+        "prompt": f"Question : {question}\n\nContexte documentaire disponible :\n{context}",
+        "stream": True,
+        "options": {"num_predict": 1200},
+    }
+    url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=120) as response:
+        for raw_line in response:
+            line = raw_line.decode("utf-8", errors="ignore").strip()
+            if not line:
+                continue
+            data = json.loads(line)
+            piece = data.get("response", "")
+            if piece:
+                yield piece
+            if data.get("done"):
+                break   
     

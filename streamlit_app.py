@@ -1,6 +1,10 @@
-# streamlit run streamlit_app.py
+"""Frontend Streamlit de l'assistant documentaire.
 
+Consomme l'API FastAPI definie dans main.py.
+Lancement : streamlit run streamlit_app.py
+"""
 
+import json
 import os
 
 import requests
@@ -14,6 +18,9 @@ NEW_PROJECT = "+ Nouveau projet"
 st.set_page_config(page_title="Assistant Projet", layout="wide")
 
 
+# Les appels reseau de la sidebar sont caches : sans ca, chaque interaction
+# Streamlit relancerait des requetes HTTP vers le backend a chaque rerun.
+@st.cache_data(ttl=10, show_spinner=False)
 def backend_ok() -> bool:
     try:
         return requests.get(f"{BACKEND_URL}/health", timeout=5).status_code == 200
@@ -21,6 +28,7 @@ def backend_ok() -> bool:
         return False
 
 
+@st.cache_data(ttl=5, show_spinner=False)
 def fetch_projects() -> list[dict]:
     try:
         response = requests.get(f"{BACKEND_URL}/projects", timeout=10)
@@ -42,14 +50,18 @@ def upload_document(project_id: str, filename: str, data: bytes) -> dict:
     return response.json()
 
 
-def ask_question(project_id: str, question: str, top_k: int = 6) -> dict:
-    response = requests.post(
-        f"{BACKEND_URL}/project/{project_id}/query",
+def stream_answer(project_id: str, question: str, top_k: int = 6):
+    """Itere les evenements NDJSON du backend (sources, tokens, erreur)."""
+    with requests.post(
+        f"{BACKEND_URL}/project/{project_id}/query/stream",
         json={"question": question, "top_k": top_k},
+        stream=True,
         timeout=HTTP_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()
+    ) as response:
+        response.raise_for_status()
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                yield json.loads(line)
 
 
 def error_message(exc: requests.RequestException) -> str:
@@ -99,6 +111,7 @@ with st.sidebar:
                 st.error(error_message(exc))
             else:
                 st.success(f"{result['filename']} : {result['chunks']} chunks indexes.")
+                fetch_projects.clear()
                 st.rerun()
 
 # ---------------- Zone principale : chat ----------------
@@ -124,15 +137,34 @@ if question:
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Recherche dans les documents et generation de la reponse..."):
+        thinking = st.empty()
+        thinking.caption("_Recherche dans les documents…_")
+        stream_result: dict = {"sources": [], "error": None, "started": False}
+
+        def token_stream():
             try:
-                result = ask_question(project_id, question)
+                for event in stream_answer(project_id, question):
+                    event_type = event.get("type")
+                    if event_type == "sources":
+                        stream_result["sources"] = event.get("sources", [])
+                    elif event_type == "token":
+                        if not stream_result["started"]:
+                            stream_result["started"] = True
+                            thinking.empty()
+                        yield event.get("text", "")
+                    elif event_type == "error":
+                        stream_result["error"] = event.get("detail", "erreur inconnue")
             except requests.RequestException as exc:
-                answer, sources = error_message(exc), []
-            else:
-                answer = result.get("answer", "(reponse vide)")
-                sources = result.get("sources", [])
-        st.markdown(answer)
+                stream_result["error"] = error_message(exc)
+
+        # Affiche la reponse au fil de sa generation (pas d'attente du texte complet)
+        answer = st.write_stream(token_stream())
+        thinking.empty()
+        sources = stream_result["sources"]
+        error = stream_result["error"]
+        if error:
+            st.error(error)
+            answer = f"{answer}\n\n{error}" if answer else error
         render_sources(sources)
 
     st.session_state[history_key].append(
