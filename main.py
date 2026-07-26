@@ -1,40 +1,108 @@
-from fastapi import FastAPI,APIRouter,Upload_file
+# uvicorn main:app --reload
+
+import os
+import sys
 import tempfile
 from pathlib import Path
-import shutil
 
-from src.ingestion.parsing import Parser
-from src.ingestion.embedding import EmbeddingClient, EmbeddingAgent
-from src.ingestion.chunking import Chunker
-from src.store import OllamaEmbeddingFunction
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
-app = FastAPI()
-router = APIRouter()
-_parser = Parser()
+ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+
+
+sys.path.insert(0, str(SRC_DIR))
+
+
+load_dotenv(ROOT_DIR / ".env")
+_chroma_dir = Path(os.getenv("CHROMA_DIR", "./chroma_data"))
+if not _chroma_dir.is_absolute():
+    _chroma_dir = SRC_DIR / _chroma_dir
+os.environ["CHROMA_DIR"] = str(_chroma_dir)
+
+from agents.agent import ask  # noqa: E402
+from ingestion.chunking import Chunker  # noqa: E402
+from ingestion.parsing import Parser  # noqa: E402
+from store import add_chunks, list_projects, search  # noqa: E402
+
+SUPPORTED_SUFFIXES = {".pdf", ".docx"}
+
+app = FastAPI(title="GoRules API", version="1.0.0")
+
 _chunker = Chunker()
-_embedding = EmbeddingAgent(embedding_client=EmbeddingClient())
 
-@app.get("/health")
-def status():
-    return {"status": "ok"}
 
-@router.post("/project/{project_id}/documents")
-async def upload_document(project_id: str, file: Upload_file):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        temp_path = tmp.name
-    document_id = Path(temp_path).stem
-    sections = _parser.parse_document(temp_path)
-    chunks = _chunker.chunk_sections(sections, document_id=document_id, project_id=project_id)
-    _embedding.embed_and_index(chunks)
+class QueryRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    top_k: int = Field(default=6, ge=1, le=20)
+
+
+class Source(BaseModel):
+    document_name: str
+    section_label: str
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: list[Source]
+
+
+def _index_document(project_id: str, filename: str, data: bytes) -> dict:
+    """Parse, chunk puis indexe un document dans la collection du projet."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format non supporte: {suffix or '(aucun)'}. Formats acceptes: PDF, DOCX.",
+        )
+    if not data:
+        raise HTTPException(status_code=400, detail="Fichier vide.")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+
+        document_name = Path(filename).stem
+        sections = Parser(tmp_path).parse_document()
+        chunks = _chunker.chunk_sections(
+            sections, document_name=document_name, project_id=project_id
+        )
+        add_chunks(project_id, chunks)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Echec de l'indexation: {exc}"
+        ) from exc
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+
     return {
-        "documents_id": document_id,
-        "filename":file.filename,
-        "chunks":len(chunks)
+        "document_name": document_name,
+        "filename": filename,
+        "chunks": len(chunks),
     }
 
-@router.post("/project/{project_id}/query")
-async def query_project(project_id: str, query: str):
-    embedding_function= OllamaEmbeddingFunction()
-    query = embedding_function.embed_query(query)
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/projects")
+def projects() -> dict:
+    return {"projects": list_projects()}
+
+
+@app.post("/project/{project_id}/documents")
+async def upload_document(project_id: str, filename: str, request: Request) -> dict:
+    """Indexe un document PDF/DOCX envoye en corps brut (nom via ?filename=)."""
+    data = await request.body()
+    return await run_in_threadpool(_index_document, project_id, filename, data)
 
