@@ -106,3 +106,20 @@ async def upload_document(project_id: str, filename: str, request: Request) -> d
     data = await request.body()
     return await run_in_threadpool(_index_document, project_id, filename, data)
 
+
+@app.post("/project/{project_id}/query", response_model=QueryResponse)
+def query_project(project_id: str, payload: QueryRequest) -> QueryResponse:
+    try:
+        chunks = search(project_id, payload.question, top_k=payload.top_k)
+        answer = ask(payload.question, chunks)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    sources = [
+        Source(
+            document_name=str(chunk.get("document_name", "?")),
+            section_label=str(chunk.get("section_label", "?")),
+        )
+        for chunk in chunks
+    ]
+    return QueryResponse(answer=answer, sources=sources)
