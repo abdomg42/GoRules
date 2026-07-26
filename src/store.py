@@ -120,3 +120,12 @@ def search(project: str, question: str, top_k: int = 6) -> list[dict]:
             if isinstance(doc, str) and isinstance(meta, dict):
                 hits.append({"content": doc, **meta})
         return hits
+
+
+def list_projects() -> list[dict]:
+    """Liste les projets (collections Chroma) avec leur nombre de chunks."""
+    projects = []
+    for collection in _client.list_collections():
+        name = getattr(collection, "name", str(collection))
+        projects.append({"name": name, "chunks": _client.get_collection(name).count()})
+    return projects
