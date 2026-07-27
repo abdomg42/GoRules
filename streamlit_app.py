@@ -11,11 +11,11 @@ import requests
 import streamlit as st
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-HTTP_TIMEOUT = 300  # l'embedding et la generation Ollama peuvent etre longs
+# HTTP_TIMEOUT = 300  # l'embedding et la generation Ollama peuvent etre longs
 
-NEW_PROJECT = "+ Nouveau projet"
+NEW_PROJECT = "+ New project"
 
-st.set_page_config(page_title="Assistant Projet", layout="wide")
+st.set_page_config(page_title="Go Rules ", layout="wide")
 
 
 # Les appels reseau de la sidebar sont caches : sans ca, chaque interaction
@@ -44,7 +44,6 @@ def upload_document(project_id: str, filename: str, data: bytes) -> dict:
         params={"filename": filename},
         data=data,
         headers={"Content-Type": "application/octet-stream"},
-        timeout=HTTP_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
@@ -56,7 +55,6 @@ def stream_answer(project_id: str, question: str, top_k: int = 6):
         f"{BACKEND_URL}/project/{project_id}/query/stream",
         json={"question": question, "top_k": top_k},
         stream=True,
-        timeout=HTTP_TIMEOUT,
     ) as response:
         response.raise_for_status()
         for line in response.iter_lines(decode_unicode=True):
@@ -85,7 +83,7 @@ projects = fetch_projects()
 project_names = [p["name"] for p in projects]
 
 with st.sidebar:
-    st.title("Assistant projet")
+    st.title("Go Rules")
     st.caption(f"Backend : {'OK' if backend_ok() else 'injoignable'} — {BACKEND_URL}")
 
     choice = st.selectbox("Projet", project_names + [NEW_PROJECT])
@@ -116,7 +114,7 @@ with st.sidebar:
 
 # ---------------- Zone principale : chat ----------------
 
-st.header(f"Assistant documentaire — {project_id}" if project_id else "Assistant documentaire")
+st.header(f"Your AI Assistant for Business Rules— {project_id}" if project_id else "Assistant documentaire")
 
 if not project_id:
     st.info("Selectionnez un projet existant ou creez-en un dans la barre laterale.")
@@ -130,7 +128,7 @@ for message in st.session_state[history_key]:
         st.markdown(message["content"])
         render_sources(message.get("sources", []))
 
-question = st.chat_input("Posez votre question (risques, jalons, avancement...)")
+question = st.chat_input("Posez votre question")
 if question:
     st.session_state[history_key].append({"role": "user", "content": question})
     with st.chat_message("user"):
