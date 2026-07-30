@@ -27,22 +27,24 @@ def _ollama_request(path: str, payload: dict) -> dict:
         raise RuntimeError(f"Reponse Ollama invalide depuis {url}: {exc}") from exc
 
 
-def ask(question: str, retrieved_chunks: list[dict]) -> str:
+def _build_user_prompt(question: str, retrieved_chunks: list[dict]) -> str:
     if not retrieved_chunks:
         return (
-            "Aucun document pertinent trouve dans ce projet pour repondre "
-            "a cette question. Avez-vous bien importe des documents "
-            "(commande : python ingest_doc.py --project ... --file ...) ?"
+            f"Question : {question}\n\n"
+            "Aucun contexte documentaire n'est disponible pour cette question "
+            "(aucun document pertinent indexe dans ce projet)."
         )
-
     context = "\n\n---\n\n".join(
         f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}"
         for c in retrieved_chunks
     )
+    return f"Question : {question}\n\nContexte documentaire disponible :\n{context}"
 
+
+def ask(question: str, retrieved_chunks: list[dict]) -> str:
     base_payload = {
         "system": SYSTEM_PROMPT,
-        "prompt": f"Question : {question}\n\nContexte documentaire disponible :\n{context}",
+        "prompt": _build_user_prompt(question, retrieved_chunks),
         "stream": False,
         # Laisser Ollama utiliser le GPU configure nativement (pas de fallback CPU ici).
         "options": {"num_predict": 1200},
@@ -99,22 +101,10 @@ def ask(question: str, retrieved_chunks: list[dict]) -> str:
 
 def ask_stream(question: str, retrieved_chunks: list[dict]):
     """Comme ask(), mais stream la reponse token par token (NDJSON Ollama)."""
-    if not retrieved_chunks:
-        yield (
-            "Aucun document pertinent trouve dans ce projet pour repondre "
-            "a cette question. Avez-vous bien importe des documents "
-            "(commande : python ingest_doc.py --project ... --file ...) ?"
-        )
-        return
-
-    context = "\n\n---\n\n".join(
-        f"[Source : {c['document_name']}, section \"{c['section_label']}\"]\n{c['content']}"
-        for c in retrieved_chunks
-    )
     payload = {
         "model": LLM_MODEL,
         "system": SYSTEM_PROMPT,
-        "prompt": f"Question : {question}\n\nContexte documentaire disponible :\n{context}",
+        "prompt": _build_user_prompt(question, retrieved_chunks),
         "stream": True,
         "options": {"num_predict": 1200},
     }
