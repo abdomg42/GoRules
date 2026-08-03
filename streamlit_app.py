@@ -62,6 +62,30 @@ def stream_answer(project_id: str, question: str, top_k: int = 6):
                 yield json.loads(line)
 
 
+@st.cache_data(ttl=5, show_spinner=False)
+def fetch_messages(project_id: str) -> list[dict]:
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}/project/{project_id}/messages",
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json().get("messages", [])
+    except requests.RequestException:
+        return []
+
+
+def clear_history(project_id: str) -> None:
+    response = requests.delete(
+        f"{BACKEND_URL}/project/{project_id}/messages",
+        timeout=10,
+    )
+    response.raise_for_status()
+    fetch_messages.clear()
+    history_key = f"history_{project_id}"
+    st.session_state[history_key] = []
+
+
 def error_message(exc: requests.RequestException) -> str:
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         return f"Erreur backend ({exc.response.status_code}) : {exc.response.text}"
@@ -112,6 +136,17 @@ with st.sidebar:
                 fetch_projects.clear()
                 st.rerun()
 
+    st.divider()
+    st.subheader("Historique")
+    if st.button("Effacer l'historique", disabled=not project_id):
+        try:
+            clear_history(project_id)
+        except requests.RequestException as exc:
+            st.error(error_message(exc))
+        else:
+            st.success("Historique efface.")
+            st.rerun()
+
 # ---------------- Zone principale : chat ----------------
 
 st.header(f"Your AI Assistant for Business Rules— {project_id}" if project_id else "Assistant documentaire")
@@ -121,7 +156,15 @@ if not project_id:
     st.stop()
 
 history_key = f"history_{project_id}"
-st.session_state.setdefault(history_key, [])
+if history_key not in st.session_state or not st.session_state[history_key]:
+    st.session_state[history_key] = [
+        {
+            "role": m["role"],
+            "content": m["content"],
+            "sources": m.get("sources", []),
+        }
+        for m in fetch_messages(project_id)
+    ]
 
 for message in st.session_state[history_key]:
     with st.chat_message(message["role"]):
